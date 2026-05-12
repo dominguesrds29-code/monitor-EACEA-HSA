@@ -79,20 +79,22 @@
                     log("⚡ Energia: " + (online ? "Conectado" : "QUEDA!"));
                     
                     try {
-                        const { error } = await supabaseClient.from('current_status').update({ 
+                        // Tenta atualizar ou inserir se não existir (UPSERT)
+                        const { error } = await supabaseClient.from('current_status').upsert({ 
+                            id: 1,
                             is_power_online: online,
                             last_update: new Date().toISOString()
-                        }).eq('id', 1);
+                        });
                         
                         if (error) throw error;
 
                         await supabaseClient.from('status_logs').insert({ event_type: online ? 'power_restore' : 'power_outage' });
-                        log("✅ Status enviado com sucesso");
-                    } catch (e) { log("❌ Erro ao enviar status: " + e.message); }
+                        log("✅ Sincronizado com a nuvem!");
+                    } catch (e) { log("❌ Erro de Sincronização: " + e.message); }
                 };
                 battery.addEventListener('chargingchange', update);
                 update();
-            } else { log("❌ Sensor de bateria não suportado neste navegador"); }
+            } else { log("❌ Sensor de bateria não suportado"); }
         }
 
         async function initCamera() {
