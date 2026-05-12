@@ -29,7 +29,6 @@
     <canvas id="canvas" style="display:none"></canvas>
 
     <script>
-        // Chaves Embutidas
         const SB_URL = "https://wzbgryhhwpaejjkcnssh.supabase.co";
         const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6YmdyeWhod3BhZWpqa2Nuc3NoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTY0MzcsImV4cCI6MjA5NDE3MjQzN30.KyC7aqIGQNjVLZ-cNwrJlappj-btxikJZaziqzFdCbM";
         
@@ -44,8 +43,16 @@
             debugLog.scrollTop = debugLog.scrollHeight;
         }
 
+        window.onload = () => {
+            log("Página carregada. Pronto para iniciar.");
+        };
+
         document.getElementById('start-btn').onclick = async () => {
             try {
+                if (!window.supabase) {
+                    throw new Error("Supabase não carregou. Verifique a internet.");
+                }
+
                 log("Conectando ao Supabase...");
                 supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
                 
@@ -59,8 +66,8 @@
                 initAudio();
                 setInterval(takePhoto, 60000);
             } catch (e) {
-                alert("Erro ao iniciar: " + e.message);
-                log("❌ Erro: " + e.message);
+                alert("Erro: " + e.message);
+                log("❌ ERRO: " + e.message);
             }
         };
 
@@ -72,14 +79,20 @@
                     log("⚡ Energia: " + (online ? "Conectado" : "QUEDA!"));
                     
                     try {
-                        await supabaseClient.from('current_status').update({ is_power_online: online }).eq('id', 1);
+                        const { error } = await supabaseClient.from('current_status').update({ 
+                            is_power_online: online,
+                            last_update: new Date().toISOString()
+                        }).eq('id', 1);
+                        
+                        if (error) throw error;
+
                         await supabaseClient.from('status_logs').insert({ event_type: online ? 'power_restore' : 'power_outage' });
-                        log("✅ Status enviado");
-                    } catch (e) { log("❌ Erro DB: " + e.message); }
+                        log("✅ Status enviado com sucesso");
+                    } catch (e) { log("❌ Erro ao enviar status: " + e.message); }
                 };
                 battery.addEventListener('chargingchange', update);
                 update();
-            } else { log("❌ Sensor de bateria não suportado"); }
+            } else { log("❌ Sensor de bateria não suportado neste navegador"); }
         }
 
         async function initCamera() {
@@ -87,25 +100,27 @@
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                 video.srcObject = stream;
                 log("✅ Câmera ativada");
-            } catch (e) { log("❌ Erro Câmera: " + e.name); }
+            } catch (e) { log("❌ Erro Câmera: " + e.message); }
         }
 
         async function takePhoto() {
             if (!video.videoWidth) return;
-            log("📸 Capturando imagem...");
+            log("📸 Capturando imagem do painel...");
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
             
             canvas.toBlob(async (blob) => {
-                const fileName = `fuel_${Date.now()}.jpg`;
-                const { data, error } = await supabaseClient.storage.from('assets').upload(fileName, blob);
-                
-                if (data) {
+                try {
+                    const fileName = `fuel_${Date.now()}.jpg`;
+                    const { data, error } = await supabaseClient.storage.from('assets').upload(fileName, blob);
+                    
+                    if (error) throw error;
+
                     const { data: { publicUrl } } = supabaseClient.storage.from('assets').getPublicUrl(fileName);
                     await supabaseClient.from('status_logs').insert({ event_type: 'fuel_check', image_url: publicUrl });
-                    log("✅ Foto enviada para Storage");
-                } else { log("❌ Erro Upload: " + error.message); }
+                    log("✅ Foto enviada para nuvem");
+                } catch (e) { log("❌ Erro na foto: " + e.message); }
             }, 'image/jpeg', 0.6);
         }
 
@@ -125,19 +140,20 @@
                     
                     if (avg > 50 && !isGenRunning) {
                         isGenRunning = true;
-                        log("⚠️ BARULHO DETECTADO! Gerador ligado.");
+                        log("⚠️ BARULHO! Gerador detectado.");
                         await supabaseClient.from('current_status').update({ is_generator_running: true }).eq('id', 1);
                         await supabaseClient.from('status_logs').insert({ event_type: 'generator_start' });
                     } else if (avg < 30 && isGenRunning) {
                         isGenRunning = false;
-                        log("🤫 Silêncio. Gerador desligado.");
+                        log("🤫 Silêncio. Gerador parou.");
                         await supabaseClient.from('current_status').update({ is_generator_running: false }).eq('id', 1);
                         await supabaseClient.from('status_logs').insert({ event_type: 'generator_stop' });
                     }
                     requestAnimationFrame(check);
                 };
                 check();
-            } catch (e) { log("❌ Erro Microfone"); }
+                log("✅ Microfone monitorando ruídos");
+            } catch (e) { log("❌ Erro Microfone: " + e.message); }
         }
     </script>
 </body>
