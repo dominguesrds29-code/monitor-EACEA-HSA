@@ -3,202 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PowerMonitor Sensor</title>
+    <title>PowerMonitor Pro | Sensor</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: sans-serif; background: #000; color: #fff; text-align: center; padding: 2rem; }
-        .status { font-size: 1.5rem; margin: 2rem 0; padding: 1rem; border-radius: 10px; }
-        .online { background: #1a4d2e; }
-        .offline { background: #4d1a1a; }
-        button { padding: 1rem 2rem; font-size: 1rem; border-radius: 50px; border: none; background: #0071e3; color: white; cursor: pointer; }
-        canvas, video { display: none; }
-        #debug-log { 
-            text-align: left; 
-            font-family: monospace; 
-            font-size: 0.8rem; 
-            background: #222; 
-            padding: 10px; 
-            margin-top: 1rem; 
-            height: 150px; 
-            overflow-y: auto; 
-            border-radius: 5px;
-            color: #0f0;
-        }
+        body { background: #000; color: #fff; text-align: center; padding: 1rem; }
+        .setup-box { background: #111; padding: 20px; border-radius: 15px; margin-bottom: 2rem; }
+        input { width: 90%; padding: 12px; margin: 10px 0; background: #222; border: 1px solid #444; color: white; border-radius: 8px; }
+        #debug-log { text-align: left; background: #111; height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; padding: 10px; color: #0f0; border-radius: 10px; margin-top: 2rem; }
     </style>
 </head>
 <body>
-    <h1>Módulo Sensor Remoto</h1>
-    <p>Mantenha esta página aberta e o celular carregando.</p>
-    
-    <div id="status-box" class="status online">Detectando...</div>
-    
-    <div style="margin: 1rem 0;">
-        <input type="text" id="api-url" placeholder="Cole seu link do Localtunnel aqui" style="width: 80%; padding: 10px; border-radius: 5px; border: 1px solid #444; background: #222; color: white;">
-        <p style="font-size: 0.7rem; color: #888; margin-top: 5px;">Ex: https://great-vans-kiss.loca.lt</p>
+    <h1>Sensor Remoto Pro</h1>
+    <p>Conecte ao seu Supabase para iniciar</p>
+
+    <div id="setup-view" class="setup-box">
+        <input type="text" id="sb-url" placeholder="Supabase URL">
+        <input type="password" id="sb-key" placeholder="Supabase Anon Key">
+        <button id="start-btn" style="width: 100%; padding: 15px; background: #0071e3; color: white; border: none; border-radius: 50px; font-weight: bold; margin-top: 10px;">INICIAR MONITORAMENTO</button>
     </div>
 
-    <button id="start-btn">Iniciar Monitoramento</button>
-    
-    <div id="debug-log">Log do Sistema:<br></div>
+    <div id="active-view" style="display: none;">
+        <div id="status-box" class="status online">Ativo</div>
+        <div id="debug-log">Log do Sistema:<br></div>
+    </div>
 
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
+    <video id="video" autoplay playsinline style="display:none"></video>
+    <canvas id="canvas" style="display:none"></canvas>
 
     <script>
-        const statusBox = document.getElementById('status-box');
-        const startBtn = document.getElementById('start-btn');
+        let supabase = null;
         const debugLog = document.getElementById('debug-log');
-        const apiUrlInput = document.getElementById('api-url');
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
-        let isPowerOnline = true;
-        let API_BASE = localStorage.getItem('api_url') || '';
-
-        if (API_BASE) apiUrlInput.value = API_BASE;
 
         function log(msg) {
             const time = new Date().toLocaleTimeString();
             debugLog.innerHTML += `[${time}] ${msg}<br>`;
             debugLog.scrollTop = debugLog.scrollHeight;
-            console.log(msg);
         }
 
-        if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-            log("⚠️ AVISO: Acesso sem HTTPS detectado. Câmera e Microfone podem não funcionar.");
-        }
+        // Restore keys
+        document.getElementById('sb-url').value = localStorage.getItem('sb_url') || '';
+        document.getElementById('sb-key').value = localStorage.getItem('sb_key') || '';
 
-        startBtn.onclick = async () => {
-            API_BASE = apiUrlInput.value.trim();
-            if (!API_BASE) {
-                alert("Por favor, cole o link do seu servidor (Localtunnel) antes de iniciar.");
-                return;
-            }
-            if (API_BASE.endsWith('/')) API_BASE = API_BASE.slice(0, -1);
-            localStorage.setItem('api_url', API_BASE);
+        document.getElementById('start-btn').onclick = async () => {
+            const url = document.getElementById('sb-url').value;
+            const key = document.getElementById('sb-key').value;
             
-            log("Iniciando sensores usando servidor: " + API_BASE);
-            startBtn.style.display = 'none';
-            apiUrlInput.parentElement.style.display = 'none';
+            if (!url || !key) return alert("Preencha os dados do Supabase!");
+            
+            localStorage.setItem('sb_url', url);
+            localStorage.setItem('sb_key', key);
+            
+            supabase = supabase.createClient(url, key);
+            
+            document.getElementById('setup-view').style.display = 'none';
+            document.getElementById('active-view').style.display = 'block';
+            
+            log("Iniciando sensores...");
             initBattery();
             initCamera();
             initAudio();
-            setInterval(takePhoto, 60000); 
-            log("Intervalo de fotos (1min) iniciado.");
+            setInterval(takePhoto, 60000);
         };
 
         async function initBattery() {
             if ('getBattery' in navigator) {
                 const battery = await navigator.getBattery();
-                log("Bateria detectada. Status inicial: " + (battery.charging ? "Carregando" : "Desconectado"));
-                
-                const updatePower = () => {
+                const update = async () => {
                     const online = battery.charging;
-                    log("Alteração de energia: " + (online ? "CONECTADO" : "DESCONECTADO"));
-                    isPowerOnline = online;
-                    sendPowerUpdate(online);
-                    statusBox.className = online ? 'status online' : 'status offline';
-                    statusBox.innerText = online ? 'Energia OK' : 'QUEDA DE ENERGIA';
+                    log("⚡ Energia: " + (online ? "Conectado" : "QUEDA!"));
+                    
+                    // Update Database
+                    await supabase.from('current_status').update({ is_power_online: online }).eq('id', 1);
+                    await supabase.from('status_logs').insert({ event_type: online ? 'power_restore' : 'power_outage' });
                 };
-
-                battery.addEventListener('chargingchange', updatePower);
-                // Send initial status immediately
-                updatePower();
-            } else {
-                log("❌ Erro: API de Bateria não suportada neste navegador.");
-            }
-        }
-
-        async function sendPowerUpdate(online) {
-            try {
-                const formData = new FormData();
-                formData.append('action', 'update_power');
-                formData.append('online', online ? 1 : 0);
-                const resp = await fetch(`${API_BASE}/api.php`, { method: 'POST', body: formData });
-                const result = await resp.json();
-                log("Status de energia enviado: " + result.status);
-            } catch (e) {
-                log("❌ Erro ao enviar status: " + e.message);
-            }
+                battery.addEventListener('chargingchange', update);
+                update();
+            } else { log("❌ Bateria não suportada"); }
         }
 
         async function initCamera() {
             try {
-                log("Solicitando acesso à câmera...");
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                 video.srcObject = stream;
-                log("✅ Câmera ativada.");
-            } catch (err) {
-                log("❌ Erro Câmera: " + err.name);
-            }
+                log("✅ Câmera pronta");
+            } catch (e) { log("❌ Erro Câmera: " + e.name); }
         }
 
         async function takePhoto() {
             if (!video.videoWidth) return;
-            log("Tirando foto...");
+            log("📸 Tirando foto...");
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
             
             canvas.toBlob(async (blob) => {
-                try {
-                    const formData = new FormData();
-                    formData.append('action', 'upload_image');
-                    formData.append('image', blob, 'fuel.jpg');
-                    const resp = await fetch(`${API_BASE}/api.php`, { method: 'POST', body: formData });
-                    const result = await resp.json();
-                    log("Foto enviada: " + result.status);
-                } catch (e) {
-                    log("❌ Erro ao enviar foto: " + e.message);
-                }
-            }, 'image/jpeg', 0.7);
+                const fileName = `fuel_${Date.now()}.jpg`;
+                const { data, error } = await supabase.storage.from('assets').upload(fileName, blob);
+                
+                if (data) {
+                    const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(fileName);
+                    await supabase.from('status_logs').insert({ event_type: 'fuel_check', image_url: publicUrl });
+                    log("✅ Foto enviada");
+                } else { log("❌ Erro Upload: " + error.message); }
+            }, 'image/jpeg', 0.6);
         }
 
         async function initAudio() {
             try {
-                log("Solicitando acesso ao microfone...");
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                log("✅ Microfone ativado.");
                 const audioContext = new AudioContext();
                 const source = audioContext.createMediaStreamSource(stream);
                 const analyzer = audioContext.createAnalyser();
                 source.connect(analyzer);
-                
-                const bufferLength = analyzer.frequencyBinCount;
-                const dataArray = new Uint8Array(bufferLength);
+                const dataArray = new Uint8Array(analyzer.frequencyBinCount);
                 
                 let isGenRunning = false;
-
-                const checkNoise = () => {
+                const check = async () => {
                     analyzer.getByteFrequencyData(dataArray);
-                    let average = dataArray.reduce((a, b) => a + b) / bufferLength;
+                    let avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
                     
-                    if (average > 50 && !isGenRunning) {
+                    if (avg > 50 && !isGenRunning) {
                         isGenRunning = true;
-                        log("⚠️ Ruído detectado! Gerador ligado.");
-                        sendGenUpdate(1);
-                    } else if (average < 30 && isGenRunning) {
+                        log("⚠️ Ruído de Gerador!");
+                        await supabase.from('current_status').update({ is_generator_running: true }).eq('id', 1);
+                        await supabase.from('status_logs').insert({ event_type: 'generator_start' });
+                    } else if (avg < 30 && isGenRunning) {
                         isGenRunning = false;
-                        log("Silêncio detectado. Gerador desligado.");
-                        sendGenUpdate(0);
+                        log("🤫 Gerador Parou");
+                        await supabase.from('current_status').update({ is_generator_running: false }).eq('id', 1);
+                        await supabase.from('status_logs').insert({ event_type: 'generator_stop' });
                     }
-                    requestAnimationFrame(checkNoise);
+                    requestAnimationFrame(check);
                 };
-                checkNoise();
-            } catch (err) {
-                log("❌ Erro Áudio: " + err.name);
-            }
-        }
-
-        async function sendGenUpdate(running) {
-            try {
-                const formData = new FormData();
-                formData.append('action', 'log_generator');
-                formData.append('running', running);
-                const resp = await fetch('api.php', { method: 'POST', body: formData });
-                const result = await resp.json();
-                log("Status do gerador enviado: " + result.status);
-            } catch (e) {
-                log("❌ Erro enviar status gerador: " + e.message);
-            }
+                check();
+            } catch (e) { log("❌ Erro Áudio"); }
         }
     </script>
 </body>
