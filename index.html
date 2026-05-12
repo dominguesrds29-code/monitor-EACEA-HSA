@@ -13,15 +13,9 @@
         <header>
             <div>
                 <h1>Monitor de Energia</h1>
-                <p id="last-sync" style="color: var(--text-secondary); margin-top: 0.5rem;">Aguardando conexão...</p>
-                
-                <div id="setup-area" style="margin-top: 15px;">
-                    <input type="text" id="sb-url" placeholder="Supabase URL" style="padding: 8px; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--card-bg); width: 250px; font-size: 0.8rem;">
-                    <input type="password" id="sb-key" placeholder="Supabase Anon Key" style="padding: 8px; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--card-bg); width: 200px; font-size: 0.8rem;">
-                    <button onclick="saveConfig()" style="padding: 8px 15px; border-radius: 8px; border: none; background: var(--accent-blue); color: white; cursor: pointer; font-weight: 600;">Conectar</button>
-                </div>
+                <p id="last-sync" style="color: var(--text-secondary); margin-top: 0.5rem;">Sincronizando com Supabase...</p>
             </div>
-            <div id="connection-status" class="indicator"></div>
+            <div id="connection-status" class="indicator online"></div>
         </header>
 
         <main>
@@ -29,13 +23,13 @@
                 <div class="card">
                     <div class="card-title">Energia Principal</div>
                     <div class="card-value" id="power-status">---</div>
-                    <p id="power-detail" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">Status desconhecido</p>
+                    <p id="power-detail" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">Carregando...</p>
                 </div>
 
                 <div class="card">
                     <div class="card-title">Gerador</div>
                     <div class="card-value" id="gen-status">---</div>
-                    <p id="gen-detail" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">Sem monitoramento</p>
+                    <p id="gen-detail" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">Carregando...</p>
                 </div>
 
                 <div class="card">
@@ -44,14 +38,14 @@
                         <i data-lucide="fuel" style="color: var(--accent-blue)"></i>
                         <span id="fuel-val">---</span>
                     </div>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">Visualização Remota</p>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">Monitoramento Remoto</p>
                 </div>
             </div>
 
             <section class="history-section">
                 <h2 style="margin-bottom: 1.5rem; font-weight: 600;">Histórico em Tempo Real</h2>
                 <div class="history-list" id="history-container">
-                    <div class="history-item">Configure o Supabase para começar.</div>
+                    <div class="history-item">Conectando ao banco de dados...</div>
                 </div>
             </section>
         </main>
@@ -59,63 +53,54 @@
 
     <script>
         lucide.createIcons();
-        let supabase = null;
 
-        function saveConfig() {
-            const url = document.getElementById('sb-url').value;
-            const key = document.getElementById('sb-key').value;
-            localStorage.setItem('sb_url', url);
-            localStorage.setItem('sb_key', key);
-            initSupabase();
-        }
+        // Chaves Embutidas
+        const SB_URL = "https://wzbgryhhwpaejjkcnssh.supabase.co";
+        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6YmdyeWhod3BhZWpqa2Nuc3NoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTY0MzcsImV4cCI6MjA5NDE3MjQzN30.KyC7aqIGQNjVLZ-cNwrJlappj-btxikJZaziqzFdCbM";
+        
+        const supabase = window.supabase.createClient(SB_URL, SB_KEY);
 
-        async function initSupabase() {
-            const url = localStorage.getItem('sb_url');
-            const key = localStorage.getItem('sb_key');
-            if (!url || !key) return;
-
-            document.getElementById('sb-url').value = url;
-            document.getElementById('sb-key').value = key;
-            
-            supabase = supabase.createClient(url, key);
-            document.getElementById('setup-area').style.display = 'none';
-            document.getElementById('connection-status').className = 'indicator online';
-
+        async function init() {
             loadData();
             subscribe();
         }
 
         async function loadData() {
-            // Load Current Status
-            const { data: status } = await supabase.from('current_status').select('*').eq('id', 1).single();
-            if (status) updateStatusUI(status);
+            try {
+                const { data: status } = await supabase.from('current_status').select('*').eq('id', 1).single();
+                if (status) updateStatusUI(status);
 
-            // Load History
-            const { data: logs } = await supabase.from('status_logs').select('*').order('created_at', { ascending: false }).limit(20);
-            if (logs) updateHistoryUI(logs);
+                const { data: logs } = await supabase.from('status_logs').select('*').order('created_at', { ascending: false }).limit(20);
+                if (logs) updateHistoryUI(logs);
+                
+                document.getElementById('connection-status').className = 'indicator online';
+            } catch (e) {
+                console.error(e);
+                document.getElementById('connection-status').className = 'indicator offline pulse';
+            }
         }
 
         function subscribe() {
-            supabase.channel('custom-all-channel')
+            supabase.channel('monitor-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'current_status' }, (payload) => {
                 updateStatusUI(payload.new);
             })
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'status_logs' }, (payload) => {
-                loadData(); // Reload for safety
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'status_logs' }, () => {
+                loadData();
             })
             .subscribe();
         }
 
         function updateStatusUI(status) {
             const pStatus = document.getElementById('power-status');
-            pStatus.innerHTML = status.is_power_online ? '<span class="indicator online"></span> <span>Online</span>' : '<span class="indicator offline pulse"></span> <span>OFFLINE</span>';
-            document.getElementById('power-detail').innerText = status.is_power_online ? 'Rede Elétrica OK' : 'Falha Detectada';
+            pStatus.innerHTML = status.is_power_online ? '<span class="indicator online"></span> <span>Online</span>' : '<span class="indicator offline pulse"></span> <span>FALTA ENERGIA</span>';
+            document.getElementById('power-detail').innerText = status.is_power_online ? 'Rede Elétrica OK' : 'Operando via UPS';
 
             const gStatus = document.getElementById('gen-status');
             gStatus.innerHTML = status.is_generator_running ? '<span class="indicator running pulse"></span> <span>LIGADO</span>' : '<span class="indicator"></span> <span>Desligado</span>';
             document.getElementById('gen-detail').innerText = status.is_generator_running ? 'Motor em operação' : 'Em stand-by';
 
-            document.getElementById('fuel-val').innerText = status.fuel_level || 'Monitorando';
+            document.getElementById('fuel-val').innerText = status.fuel_level || 'Ativo';
             document.getElementById('last-sync').innerText = 'Sincronizado: ' + new Date().toLocaleTimeString();
         }
 
@@ -135,7 +120,7 @@
                 item.innerHTML = `
                     <div class="event-type">
                         <i data-lucide="${icon}" style="color: ${color}; width: 18px;"></i>
-                        <span>${log.event_type.replace('_', ' ')}</span>
+                        <span>${formatEvent(log.event_type)}</span>
                     </div>
                     <div style="display: flex; align-items: center;">
                         <span class="event-time">${new Date(log.created_at).toLocaleString()}</span>
@@ -147,7 +132,18 @@
             lucide.createIcons();
         }
 
-        initSupabase();
+        function formatEvent(type) {
+            const map = {
+                'power_outage': 'Queda de Energia',
+                'power_restore': 'Energia Restaurada',
+                'generator_start': 'Gerador Ligado',
+                'generator_stop': 'Gerador Desligado',
+                'fuel_check': 'Monitoramento Visual'
+            };
+            return map[type] || type;
+        }
+
+        init();
     </script>
 </body>
 </html>

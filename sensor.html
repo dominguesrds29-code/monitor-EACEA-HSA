@@ -8,23 +8,20 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { background: #000; color: #fff; text-align: center; padding: 1rem; }
-        .setup-box { background: #111; padding: 20px; border-radius: 15px; margin-bottom: 2rem; }
-        input { width: 90%; padding: 12px; margin: 10px 0; background: #222; border: 1px solid #444; color: white; border-radius: 8px; }
-        #debug-log { text-align: left; background: #111; height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; padding: 10px; color: #0f0; border-radius: 10px; margin-top: 2rem; }
+        #debug-log { text-align: left; background: #111; height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; padding: 10px; color: #0f0; border-radius: 10px; margin-top: 2rem; border: 1px solid #333; }
+        .big-btn { width: 100%; padding: 20px; background: #0071e3; color: white; border: none; border-radius: 50px; font-weight: bold; font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 15px rgba(0,113,227,0.4); }
     </style>
 </head>
 <body>
-    <h1>Sensor Remoto Pro</h1>
-    <p>Conecte ao seu Supabase para iniciar</p>
+    <h1 style="margin-top: 2rem;">Sensor Remoto Pro</h1>
+    <p style="color: #888; margin-bottom: 2rem;">Mantenha o celular na tomada e a tela ligada.</p>
 
-    <div id="setup-view" class="setup-box">
-        <input type="text" id="sb-url" placeholder="Supabase URL">
-        <input type="password" id="sb-key" placeholder="Supabase Anon Key">
-        <button id="start-btn" style="width: 100%; padding: 15px; background: #0071e3; color: white; border: none; border-radius: 50px; font-weight: bold; margin-top: 10px;">INICIAR MONITORAMENTO</button>
+    <div id="setup-view">
+        <button id="start-btn" class="big-btn">LIGAR MONITORAMENTO</button>
     </div>
 
     <div id="active-view" style="display: none;">
-        <div id="status-box" class="status online">Ativo</div>
+        <div id="status-box" class="status online">Monitoramento Ativo</div>
         <div id="debug-log">Log do Sistema:<br></div>
     </div>
 
@@ -32,7 +29,11 @@
     <canvas id="canvas" style="display:none"></canvas>
 
     <script>
-        let supabase = null;
+        // Chaves Embutidas
+        const SB_URL = "https://wzbgryhhwpaejjkcnssh.supabase.co";
+        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6YmdyeWhod3BhZWpqa2Nuc3NoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTY0MzcsImV4cCI6MjA5NDE3MjQzN30.KyC7aqIGQNjVLZ-cNwrJlappj-btxikJZaziqzFdCbM";
+        
+        const supabase = window.supabase.createClient(SB_URL, SB_KEY);
         const debugLog = document.getElementById('debug-log');
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
@@ -43,25 +44,13 @@
             debugLog.scrollTop = debugLog.scrollHeight;
         }
 
-        // Restore keys
-        document.getElementById('sb-url').value = localStorage.getItem('sb_url') || '';
-        document.getElementById('sb-key').value = localStorage.getItem('sb_key') || '';
-
         document.getElementById('start-btn').onclick = async () => {
-            const url = document.getElementById('sb-url').value;
-            const key = document.getElementById('sb-key').value;
-            
-            if (!url || !key) return alert("Preencha os dados do Supabase!");
-            
-            localStorage.setItem('sb_url', url);
-            localStorage.setItem('sb_key', key);
-            
-            supabase = supabase.createClient(url, key);
-            
             document.getElementById('setup-view').style.display = 'none';
             document.getElementById('active-view').style.display = 'block';
             
+            log("Conectando ao Supabase...");
             log("Iniciando sensores...");
+            
             initBattery();
             initCamera();
             initAudio();
@@ -75,26 +64,28 @@
                     const online = battery.charging;
                     log("⚡ Energia: " + (online ? "Conectado" : "QUEDA!"));
                     
-                    // Update Database
-                    await supabase.from('current_status').update({ is_power_online: online }).eq('id', 1);
-                    await supabase.from('status_logs').insert({ event_type: online ? 'power_restore' : 'power_outage' });
+                    try {
+                        await supabase.from('current_status').update({ is_power_online: online }).eq('id', 1);
+                        await supabase.from('status_logs').insert({ event_type: online ? 'power_restore' : 'power_outage' });
+                        log("✅ Status enviado");
+                    } catch (e) { log("❌ Erro DB: " + e.message); }
                 };
                 battery.addEventListener('chargingchange', update);
                 update();
-            } else { log("❌ Bateria não suportada"); }
+            } else { log("❌ Sensor de bateria não suportado"); }
         }
 
         async function initCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                 video.srcObject = stream;
-                log("✅ Câmera pronta");
+                log("✅ Câmera ativada");
             } catch (e) { log("❌ Erro Câmera: " + e.name); }
         }
 
         async function takePhoto() {
             if (!video.videoWidth) return;
-            log("📸 Tirando foto...");
+            log("📸 Capturando imagem...");
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
@@ -106,7 +97,7 @@
                 if (data) {
                     const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(fileName);
                     await supabase.from('status_logs').insert({ event_type: 'fuel_check', image_url: publicUrl });
-                    log("✅ Foto enviada");
+                    log("✅ Foto enviada para Storage");
                 } else { log("❌ Erro Upload: " + error.message); }
             }, 'image/jpeg', 0.6);
         }
@@ -127,19 +118,19 @@
                     
                     if (avg > 50 && !isGenRunning) {
                         isGenRunning = true;
-                        log("⚠️ Ruído de Gerador!");
+                        log("⚠️ BARULHO DETECTADO! Gerador ligado.");
                         await supabase.from('current_status').update({ is_generator_running: true }).eq('id', 1);
                         await supabase.from('status_logs').insert({ event_type: 'generator_start' });
                     } else if (avg < 30 && isGenRunning) {
                         isGenRunning = false;
-                        log("🤫 Gerador Parou");
+                        log("🤫 Silêncio. Gerador desligado.");
                         await supabase.from('current_status').update({ is_generator_running: false }).eq('id', 1);
                         await supabase.from('status_logs').insert({ event_type: 'generator_stop' });
                     }
                     requestAnimationFrame(check);
                 };
                 check();
-            } catch (e) { log("❌ Erro Áudio"); }
+            } catch (e) { log("❌ Erro Microfone"); }
         }
     </script>
 </body>
