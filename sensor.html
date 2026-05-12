@@ -31,6 +31,11 @@
     
     <div id="status-box" class="status online">Detectando...</div>
     
+    <div style="margin: 1rem 0;">
+        <input type="text" id="api-url" placeholder="Cole seu link do Localtunnel aqui" style="width: 80%; padding: 10px; border-radius: 5px; border: 1px solid #444; background: #222; color: white;">
+        <p style="font-size: 0.7rem; color: #888; margin-top: 5px;">Ex: https://great-vans-kiss.loca.lt</p>
+    </div>
+
     <button id="start-btn">Iniciar Monitoramento</button>
     
     <div id="debug-log">Log do Sistema:<br></div>
@@ -42,9 +47,13 @@
         const statusBox = document.getElementById('status-box');
         const startBtn = document.getElementById('start-btn');
         const debugLog = document.getElementById('debug-log');
+        const apiUrlInput = document.getElementById('api-url');
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         let isPowerOnline = true;
+        let API_BASE = localStorage.getItem('api_url') || '';
+
+        if (API_BASE) apiUrlInput.value = API_BASE;
 
         function log(msg) {
             const time = new Date().toLocaleTimeString();
@@ -58,8 +67,17 @@
         }
 
         startBtn.onclick = async () => {
-            log("Iniciando sensores...");
+            API_BASE = apiUrlInput.value.trim();
+            if (!API_BASE) {
+                alert("Por favor, cole o link do seu servidor (Localtunnel) antes de iniciar.");
+                return;
+            }
+            if (API_BASE.endsWith('/')) API_BASE = API_BASE.slice(0, -1);
+            localStorage.setItem('api_url', API_BASE);
+            
+            log("Iniciando sensores usando servidor: " + API_BASE);
             startBtn.style.display = 'none';
+            apiUrlInput.parentElement.style.display = 'none';
             initBattery();
             initCamera();
             initAudio();
@@ -94,7 +112,7 @@
                 const formData = new FormData();
                 formData.append('action', 'update_power');
                 formData.append('online', online ? 1 : 0);
-                const resp = await fetch('api.php', { method: 'POST', body: formData });
+                const resp = await fetch(`${API_BASE}/api.php`, { method: 'POST', body: formData });
                 const result = await resp.json();
                 log("Status de energia enviado: " + result.status);
             } catch (e) {
@@ -125,7 +143,7 @@
                     const formData = new FormData();
                     formData.append('action', 'upload_image');
                     formData.append('image', blob, 'fuel.jpg');
-                    const resp = await fetch('api.php', { method: 'POST', body: formData });
+                    const resp = await fetch(`${API_BASE}/api.php`, { method: 'POST', body: formData });
                     const result = await resp.json();
                     log("Foto enviada: " + result.status);
                 } catch (e) {

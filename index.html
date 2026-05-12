@@ -13,6 +13,10 @@
             <div>
                 <h1>Monitor de Energia</h1>
                 <p style="color: var(--text-secondary); margin-top: 0.5rem;" id="last-sync">Sincronizado: --:--:--</p>
+                <div style="margin-top: 10px;">
+                    <input type="text" id="api-url" placeholder="Link do Localtunnel" style="padding: 5px 10px; border-radius: 5px; border: 1px solid var(--glass-border); background: var(--card-bg); font-size: 0.8rem;">
+                    <button onclick="saveApiUrl()" style="padding: 5px 10px; border-radius: 5px; border: none; background: var(--accent-blue); color: white; cursor: pointer; font-size: 0.8rem;">Salvar API</button>
+                </div>
             </div>
             <div id="connection-status" class="indicator online"></div>
         </header>
@@ -66,9 +70,26 @@
         // Initialize Lucide icons
         lucide.createIcons();
 
+        let API_BASE = localStorage.getItem('api_url') || '';
+        const apiUrlInput = document.getElementById('api-url');
+        if (API_BASE) apiUrlInput.value = API_BASE;
+
+        function saveApiUrl() {
+            let url = apiUrlInput.value.trim();
+            if (url.endsWith('/')) url = url.slice(0, -1);
+            localStorage.setItem('api_url', url);
+            API_BASE = url;
+            alert("URL da API salva!");
+            updateDashboard();
+        }
+
         async function updateDashboard() {
+            if (!API_BASE) {
+                document.getElementById('history-container').innerHTML = '<div class="history-item">⚠️ Configure a URL da API acima.</div>';
+                return;
+            }
             try {
-                const response = await fetch('api.php?action=get_status');
+                const response = await fetch(`${API_BASE}/api.php?action=get_status`);
                 const data = await response.json();
                 
                 // Update Current Status
@@ -116,10 +137,10 @@
 
                     let mediaHtml = '';
                     if (log.image_path) {
-                        mediaHtml = `<a href="${log.image_path}" target="_blank" class="event-media">Ver Foto</a>`;
+                        mediaHtml = `<a href="${API_BASE}/${log.image_path}" target="_blank" class="event-media">Ver Foto</a>`;
                     }
                     if (log.audio_path) {
-                        mediaHtml += `<a href="${log.audio_path}" target="_blank" class="event-media">Ouvir Áudio</a>`;
+                        mediaHtml += `<a href="${API_BASE}/${log.audio_path}" target="_blank" class="event-media">Ouvir Áudio</a>`;
                     }
 
                     item.innerHTML = `
