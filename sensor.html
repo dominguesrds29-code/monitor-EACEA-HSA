@@ -33,7 +33,7 @@
         const SB_URL = "https://wzbgryhhwpaejjkcnssh.supabase.co";
         const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6YmdyeWhod3BhZWpqa2Nuc3NoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTY0MzcsImV4cCI6MjA5NDE3MjQzN30.KyC7aqIGQNjVLZ-cNwrJlappj-btxikJZaziqzFdCbM";
         
-        const supabase = window.supabase.createClient(SB_URL, SB_KEY);
+        let supabaseClient = null;
         const debugLog = document.getElementById('debug-log');
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
@@ -45,16 +45,23 @@
         }
 
         document.getElementById('start-btn').onclick = async () => {
-            document.getElementById('setup-view').style.display = 'none';
-            document.getElementById('active-view').style.display = 'block';
-            
-            log("Conectando ao Supabase...");
-            log("Iniciando sensores...");
-            
-            initBattery();
-            initCamera();
-            initAudio();
-            setInterval(takePhoto, 60000);
+            try {
+                log("Conectando ao Supabase...");
+                supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
+                
+                document.getElementById('setup-view').style.display = 'none';
+                document.getElementById('active-view').style.display = 'block';
+                
+                log("✅ Conectado. Iniciando sensores...");
+                
+                initBattery();
+                initCamera();
+                initAudio();
+                setInterval(takePhoto, 60000);
+            } catch (e) {
+                alert("Erro ao iniciar: " + e.message);
+                log("❌ Erro: " + e.message);
+            }
         };
 
         async function initBattery() {
@@ -65,8 +72,8 @@
                     log("⚡ Energia: " + (online ? "Conectado" : "QUEDA!"));
                     
                     try {
-                        await supabase.from('current_status').update({ is_power_online: online }).eq('id', 1);
-                        await supabase.from('status_logs').insert({ event_type: online ? 'power_restore' : 'power_outage' });
+                        await supabaseClient.from('current_status').update({ is_power_online: online }).eq('id', 1);
+                        await supabaseClient.from('status_logs').insert({ event_type: online ? 'power_restore' : 'power_outage' });
                         log("✅ Status enviado");
                     } catch (e) { log("❌ Erro DB: " + e.message); }
                 };
@@ -92,11 +99,11 @@
             
             canvas.toBlob(async (blob) => {
                 const fileName = `fuel_${Date.now()}.jpg`;
-                const { data, error } = await supabase.storage.from('assets').upload(fileName, blob);
+                const { data, error } = await supabaseClient.storage.from('assets').upload(fileName, blob);
                 
                 if (data) {
-                    const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(fileName);
-                    await supabase.from('status_logs').insert({ event_type: 'fuel_check', image_url: publicUrl });
+                    const { data: { publicUrl } } = supabaseClient.storage.from('assets').getPublicUrl(fileName);
+                    await supabaseClient.from('status_logs').insert({ event_type: 'fuel_check', image_url: publicUrl });
                     log("✅ Foto enviada para Storage");
                 } else { log("❌ Erro Upload: " + error.message); }
             }, 'image/jpeg', 0.6);
@@ -119,13 +126,13 @@
                     if (avg > 50 && !isGenRunning) {
                         isGenRunning = true;
                         log("⚠️ BARULHO DETECTADO! Gerador ligado.");
-                        await supabase.from('current_status').update({ is_generator_running: true }).eq('id', 1);
-                        await supabase.from('status_logs').insert({ event_type: 'generator_start' });
+                        await supabaseClient.from('current_status').update({ is_generator_running: true }).eq('id', 1);
+                        await supabaseClient.from('status_logs').insert({ event_type: 'generator_start' });
                     } else if (avg < 30 && isGenRunning) {
                         isGenRunning = false;
                         log("🤫 Silêncio. Gerador desligado.");
-                        await supabase.from('current_status').update({ is_generator_running: false }).eq('id', 1);
-                        await supabase.from('status_logs').insert({ event_type: 'generator_stop' });
+                        await supabaseClient.from('current_status').update({ is_generator_running: false }).eq('id', 1);
+                        await supabaseClient.from('status_logs').insert({ event_type: 'generator_stop' });
                     }
                     requestAnimationFrame(check);
                 };
