@@ -67,15 +67,31 @@
 
         async function loadData() {
             try {
-                const { data: status } = await supabase.from('current_status').select('*').eq('id', 1).single();
-                if (status) updateStatusUI(status);
-
-                const { data: logs } = await supabase.from('status_logs').select('*').order('created_at', { ascending: false }).limit(20);
-                if (logs) updateHistoryUI(logs);
+                console.log("Tentando carregar dados do Supabase...");
+                const { data: status, error: statusError } = await supabase.from('current_status').select('*').eq('id', 1).single();
                 
-                document.getElementById('connection-status').className = 'indicator online';
+                if (statusError) {
+                    console.error("Erro no current_status:", statusError);
+                    document.getElementById('last-sync').innerText = "Erro: Tabela current_status não encontrada!";
+                    return;
+                }
+
+                if (status) {
+                    updateStatusUI(status);
+                    document.getElementById('connection-status').className = 'indicator online';
+                }
+
+                const { data: logs, error: logsError } = await supabase.from('status_logs').select('*').order('created_at', { ascending: false }).limit(20);
+                if (logsError) {
+                    console.error("Erro no status_logs:", logsError);
+                } else if (logs) {
+                    updateHistoryUI(logs);
+                }
+                
+                document.getElementById('last-sync').innerText = 'Sincronizado: ' + new Date().toLocaleTimeString();
             } catch (e) {
-                console.error(e);
+                console.error("Erro Geral:", e);
+                document.getElementById('last-sync').innerText = "Erro de conexão: " + e.message;
                 document.getElementById('connection-status').className = 'indicator offline pulse';
             }
         }
