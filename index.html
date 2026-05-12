@@ -163,8 +163,20 @@
             return map[type] || type;
         }
 
-        // Iniciar tudo
-        window.onload = init;
+        // Iniciar tudo imediatamente
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+
+        // Tentar recarregar dados a cada 30 segundos se falhar
+        setInterval(() => {
+            if (supabase && document.getElementById('connection-status').classList.contains('offline')) {
+                console.log("Tentando reconectar...");
+                loadData();
+            }
+        }, 10000);
     </script>
 </body>
 </html>
