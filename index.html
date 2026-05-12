@@ -85,19 +85,43 @@
         }
 
         async function loadData() {
-            console.log("Buscando dados...");
-            const { data: status, error: statusError } = await supabase.from('current_status').select('*').eq('id', 1).single();
-            
-            if (statusError) {
-                throw new Error("Tabelas não encontradas. Você rodou o comando SQL no Supabase?");
+            console.log("Iniciando busca de dados...");
+            const lastSyncEl = document.getElementById('last-sync');
+            lastSyncEl.innerText = "Buscando dados no banco...";
+
+            try {
+                // Forçar um timeout para não ficar esperando para sempre
+                const { data: status, error: statusError } = await supabase.from('current_status').select('*').eq('id', 1).single();
+                
+                if (statusError) {
+                    console.error("Erro Supabase:", statusError);
+                    lastSyncEl.innerText = "ERRO SUPABASE: " + statusError.message;
+                    document.getElementById('history-container').innerHTML = `<div class="history-item" style="color: var(--accent-red)">Erro: ${statusError.message}. Verifique se a tabela existe!</div>`;
+                    return;
+                }
+
+                if (!status) {
+                    lastSyncEl.innerText = "ERRO: Tabela vazia!";
+                    return;
+                }
+
+                console.log("Dados recebidos:", status);
+                updateStatusUI(status);
+                
+                const { data: logs, error: logsError } = await supabase.from('status_logs').select('*').order('created_at', { ascending: false }).limit(20);
+                if (logsError) console.error("Erro nos logs:", logsError);
+                if (logs) updateHistoryUI(logs);
+                
+                lastSyncEl.innerText = 'Sincronizado: ' + new Date().toLocaleTimeString();
+                document.getElementById('connection-status').className = 'indicator online';
+                document.getElementById('main-grid').style.opacity = "1";
+                document.getElementById('main-grid').style.pointerEvents = "all";
+
+            } catch (e) {
+                console.error("Erro na requisição:", e);
+                lastSyncEl.innerText = "ERRO DE REDE: " + e.message;
+                document.getElementById('connection-status').className = 'indicator offline pulse';
             }
-
-            if (status) updateStatusUI(status);
-
-            const { data: logs } = await supabase.from('status_logs').select('*').order('created_at', { ascending: false }).limit(20);
-            if (logs) updateHistoryUI(logs);
-            
-            document.getElementById('last-sync').innerText = 'Sincronizado: ' + new Date().toLocaleTimeString();
         }
 
         function subscribe() {
