@@ -107,23 +107,37 @@
 
         async function takePhoto() {
             if (!video.videoWidth) return;
-            log("📸 Capturando imagem do painel...");
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
+            log("📸 Capturando e comprimindo imagem...");
             
+            // Redimensionar para economizar espaço (máximo 1024px de largura)
+            const scale = Math.min(1, 1024 / video.videoWidth);
+            canvas.width = video.videoWidth * scale;
+            canvas.height = video.videoHeight * scale;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Qualidade 0.5 (50%) para reduzir drasticamente o tamanho do arquivo
             canvas.toBlob(async (blob) => {
                 try {
                     const fileName = `fuel_${Date.now()}.jpg`;
-                    const { data, error } = await supabaseClient.storage.from('assets').upload(fileName, blob);
+                    const { data, error } = await supabaseClient.storage.from('assets').upload(fileName, blob, {
+                        contentType: 'image/jpeg'
+                    });
                     
                     if (error) throw error;
 
                     const { data: { publicUrl } } = supabaseClient.storage.from('assets').getPublicUrl(fileName);
-                    await supabaseClient.from('status_logs').insert({ event_type: 'fuel_check', image_url: publicUrl });
-                    log("✅ Foto enviada para nuvem");
+                    
+                    // Salvar a URL na tabela de logs para o Dashboard encontrar
+                    await supabaseClient.from('status_logs').insert({ 
+                        event_type: 'fuel_check', 
+                        image_url: publicUrl 
+                    });
+                    
+                    log(`✅ Foto enviada (${(blob.size/1024).toFixed(1)} KB)`);
                 } catch (e) { log("❌ Erro na foto: " + e.message); }
-            }, 'image/jpeg', 0.6);
+            }, 'image/jpeg', 0.5); 
         }
 
         async function initAudio() {
