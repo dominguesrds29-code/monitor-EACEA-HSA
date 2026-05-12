@@ -3,17 +3,21 @@ require_once 'config.php';
 
 header('Content-Type: application/json');
 
-// Error logging to file
+// Error logging to file - Disable display to avoid breaking JSON
+ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 ini_set('error_log', 'php_errors.log');
+error_reporting(E_ALL);
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($action === 'update_power') {
     $is_online = isset($_POST['online']) ? (int)$_POST['online'] : 1;
-    updateStatus($is_online, ($is_online ? 0 : 1)); // Assumption: if power is out, gen might start
+    updateStatus($is_online, ($is_online ? 0 : 1)); 
     logEvent($is_online ? 'power_restore' : 'power_outage');
+    ob_clean();
     echo json_encode(['status' => 'success']);
+    exit;
 } 
 
 elseif ($action === 'upload_image') {
@@ -30,11 +34,14 @@ elseif ($action === 'upload_image') {
         
         if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
             logEvent('fuel_check', 'Image uploaded', $target_file);
+            ob_clean();
             echo json_encode(['status' => 'success', 'path' => $target_file]);
         } else {
             error_log("File upload failed: " . $_FILES['image']['error']);
+            ob_clean();
             echo json_encode(['status' => 'error', 'message' => 'Upload failed']);
         }
+        exit;
     }
 }
 
@@ -50,7 +57,9 @@ elseif ($action === 'log_generator') {
         move_uploaded_file($_FILES['audio']['tmp_name'], $upload_dir . $filename);
     }
     
+    ob_clean();
     echo json_encode(['status' => 'success']);
+    exit;
 }
 
 elseif ($action === 'get_status') {
@@ -63,9 +72,10 @@ elseif ($action === 'get_status') {
         $history[] = $row;
     }
     
+    ob_clean();
     echo json_encode([
         'current' => $current,
         'history' => $history
     ]);
+    exit;
 }
-?>

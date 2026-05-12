@@ -23,9 +23,20 @@ function logEvent($type, $value = null, $image = null, $audio = null) {
 // Function to update current status
 function updateStatus($power, $generator, $fuel = null) {
     global $conn;
-    $stmt = $conn->prepare("UPDATE current_status SET is_power_online = ?, is_generator_running = ?, fuel_level = ? WHERE id = 1");
-    $stmt->bind_param("iis", $power, $generator, $fuel);
+    
+    $updates = [];
+    $types = "";
+    $params = [];
+    
+    if ($power !== null) { $updates[] = "is_power_online = ?"; $types .= "i"; $params[] = $power; }
+    if ($generator !== null) { $updates[] = "is_generator_running = ?"; $types .= "i"; $params[] = $generator; }
+    if ($fuel !== null) { $updates[] = "fuel_level = ?"; $types .= "s"; $params[] = $fuel; }
+    
+    if (empty($updates)) return;
+    
+    $sql = "UPDATE current_status SET " . implode(", ", $updates) . " WHERE id = 1";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param($types, ...$params);
     $stmt->execute();
     $stmt->close();
 }
-?>
