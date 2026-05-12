@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerMonitor Pro | Status de Energia</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Monitor de Energia</h1>
+                <p style="color: var(--text-secondary); margin-top: 0.5rem;" id="last-sync">Sincronizado: --:--:--</p>
+            </div>
+            <div id="connection-status" class="indicator online"></div>
+        </header>
+
+        <main>
+            <div class="status-grid">
+                <!-- Power Card -->
+                <div class="card">
+                    <div class="card-title">Energia Principal</div>
+                    <div class="card-value" id="power-status">
+                        <span class="indicator online"></span>
+                        <span>Online</span>
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;" id="power-detail">Rede Elétrica Conectada</p>
+                </div>
+
+                <!-- Generator Card -->
+                <div class="card">
+                    <div class="card-title">Gerador</div>
+                    <div class="card-value" id="gen-status">
+                        <span class="indicator"></span>
+                        <span>Desligado</span>
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;" id="gen-detail">Nenhum ruído detectado</p>
+                </div>
+
+                <!-- Fuel Card -->
+                <div class="card">
+                    <div class="card-title">Combustível & UPS</div>
+                    <div class="card-value" id="fuel-status">
+                        <i data-lucide="fuel" style="color: var(--accent-blue)"></i>
+                        <span>Monitorando</span>
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;" id="fuel-detail">Foto a cada 1 min</p>
+                </div>
+            </div>
+
+            <section class="history-section">
+                <h2 style="margin-bottom: 1.5rem; font-weight: 600;">Histórico de Eventos</h2>
+                <div class="history-list" id="history-container">
+                    <!-- Items will be loaded here -->
+                    <div class="history-item">
+                        <span>Carregando histórico...</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        async function updateDashboard() {
+            try {
+                const response = await fetch('api.php?action=get_status');
+                const data = await response.json();
+                
+                // Update Current Status
+                const powerElem = document.getElementById('power-status');
+                const powerDetail = document.getElementById('power-detail');
+                if (data.current.is_power_online == 1) {
+                    powerElem.innerHTML = '<span class="indicator online"></span> <span>Online</span>';
+                    powerDetail.innerText = 'Rede Elétrica Conectada';
+                } else {
+                    powerElem.innerHTML = '<span class="indicator offline pulse"></span> <span>FALTA DE ENERGIA</span>';
+                    powerDetail.innerText = 'Operando via UPS / Gerador';
+                }
+
+                const genElem = document.getElementById('gen-status');
+                const genDetail = document.getElementById('gen-detail');
+                if (data.current.is_generator_running == 1) {
+                    genElem.innerHTML = '<span class="indicator running pulse"></span> <span>EM OPERAÇÃO</span>';
+                    genDetail.innerText = 'Ruído de motor detectado';
+                } else {
+                    genElem.innerHTML = '<span class="indicator"></span> <span>Desligado</span>';
+                    genDetail.innerText = 'Aguardando partida';
+                }
+
+                // Update History
+                const historyContainer = document.getElementById('history-container');
+                historyContainer.innerHTML = '';
+                
+                data.history.forEach(log => {
+                    const item = document.createElement('div');
+                    item.className = 'history-item';
+                    
+                    let icon = 'info';
+                    let color = 'var(--text-secondary)';
+                    
+                    if (log.event_type.includes('power')) {
+                        icon = 'zap';
+                        color = log.event_type === 'power_restore' ? 'var(--accent-green)' : 'var(--accent-red)';
+                    } else if (log.event_type.includes('generator')) {
+                        icon = 'engine';
+                        color = 'var(--accent-orange)';
+                    } else if (log.event_type === 'fuel_check') {
+                        icon = 'camera';
+                        color = 'var(--accent-blue)';
+                    }
+
+                    let mediaHtml = '';
+                    if (log.image_path) {
+                        mediaHtml = `<a href="${log.image_path}" target="_blank" class="event-media">Ver Foto</a>`;
+                    }
+                    if (log.audio_path) {
+                        mediaHtml += `<a href="${log.audio_path}" target="_blank" class="event-media">Ouvir Áudio</a>`;
+                    }
+
+                    item.innerHTML = `
+                        <div class="event-type">
+                            <i data-lucide="${icon}" style="color: ${color}; width: 18px;"></i>
+                            <span>${formatEventType(log.event_type)}</span>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <span class="event-time">${formatDate(log.created_at)}</span>
+                            ${mediaHtml}
+                        </div>
+                    `;
+                    historyContainer.appendChild(item);
+                });
+                
+                lucide.createIcons();
+                document.getElementById('last-sync').innerText = 'Sincronizado: ' + new Date().toLocaleTimeString();
+                document.getElementById('connection-status').className = 'indicator online';
+
+            } catch (error) {
+                console.error('Error fetching status:', error);
+                document.getElementById('connection-status').className = 'indicator offline pulse';
+            }
+        }
+
+        function formatEventType(type) {
+            const types = {
+                'power_outage': 'Queda de Energia',
+                'power_restore': 'Energia Restaurada',
+                'generator_start': 'Gerador Ligado',
+                'generator_stop': 'Gerador Desligado',
+                'fuel_check': 'Monitoramento de Nível'
+            };
+            return types[type] || type;
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleString('pt-BR');
+        }
+
+        // Poll every 5 seconds
+        setInterval(updateDashboard, 5000);
+        updateDashboard();
+    </script>
+</body>
+</html>

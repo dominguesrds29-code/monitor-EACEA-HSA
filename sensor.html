@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerMonitor Sensor</title>
+    <style>
+        body { font-family: sans-serif; background: #000; color: #fff; text-align: center; padding: 2rem; }
+        .status { font-size: 1.5rem; margin: 2rem 0; padding: 1rem; border-radius: 10px; }
+        .online { background: #1a4d2e; }
+        .offline { background: #4d1a1a; }
+        button { padding: 1rem 2rem; font-size: 1rem; border-radius: 50px; border: none; background: #0071e3; color: white; cursor: pointer; }
+        canvas, video { display: none; }
+        #debug-log { 
+            text-align: left; 
+            font-family: monospace; 
+            font-size: 0.8rem; 
+            background: #222; 
+            padding: 10px; 
+            margin-top: 1rem; 
+            height: 150px; 
+            overflow-y: auto; 
+            border-radius: 5px;
+            color: #0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Módulo Sensor Remoto</h1>
+    <p>Mantenha esta página aberta e o celular carregando.</p>
+    
+    <div id="status-box" class="status online">Detectando...</div>
+    
+    <button id="start-btn">Iniciar Monitoramento</button>
+    
+    <div id="debug-log">Log do Sistema:<br></div>
+
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const statusBox = document.getElementById('status-box');
+        const startBtn = document.getElementById('start-btn');
+        const debugLog = document.getElementById('debug-log');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        let isPowerOnline = true;
+
+        function log(msg) {
+            const time = new Date().toLocaleTimeString();
+            debugLog.innerHTML += `[${time}] ${msg}<br>`;
+            debugLog.scrollTop = debugLog.scrollHeight;
+            console.log(msg);
+        }
+
+        if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+            log("⚠️ AVISO: Acesso sem HTTPS detectado. Câmera e Microfone podem não funcionar.");
+        }
+
+        startBtn.onclick = async () => {
+            log("Iniciando sensores...");
+            startBtn.style.display = 'none';
+            initBattery();
+            initCamera();
+            initAudio();
+            setInterval(takePhoto, 60000); 
+            log("Intervalo de fotos (1min) iniciado.");
+        };
+
+        async function initBattery() {
+            if ('getBattery' in navigator) {
+                const battery = await navigator.getBattery();
+                log("Bateria detectada. Status inicial: " + (battery.charging ? "Carregando" : "Desconectado"));
+                
+                const updatePower = () => {
+                    const online = battery.charging;
+                    log("Alteração de energia: " + (online ? "CONECTADO" : "DESCONECTADO"));
+                    isPowerOnline = online;
+                    sendPowerUpdate(online);
+                    statusBox.className = online ? 'status online' : 'status offline';
+                    statusBox.innerText = online ? 'Energia OK' : 'QUEDA DE ENERGIA';
+                };
+
+                battery.addEventListener('chargingchange', updatePower);
+                // Send initial status immediately
+                updatePower();
+            } else {
+                log("❌ Erro: API de Bateria não suportada neste navegador.");
+            }
+        }
+
+        async function sendPowerUpdate(online) {
+            try {
+                const formData = new FormData();
+                formData.append('action', 'update_power');
+                formData.append('online', online ? 1 : 0);
+                const resp = await fetch('api.php', { method: 'POST', body: formData });
+                const result = await resp.json();
+                log("Status de energia enviado: " + result.status);
+            } catch (e) {
+                log("❌ Erro ao enviar status: " + e.message);
+            }
+        }
+
+        async function initCamera() {
+            try {
+                log("Solicitando acesso à câmera...");
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                video.srcObject = stream;
+                log("✅ Câmera ativada.");
+            } catch (err) {
+                log("❌ Erro Câmera: " + err.name);
+            }
+        }
+
+        async function takePhoto() {
+            if (!video.videoWidth) return;
+            log("Tirando foto...");
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            canvas.toBlob(async (blob) => {
+                try {
+                    const formData = new FormData();
+                    formData.append('action', 'upload_image');
+                    formData.append('image', blob, 'fuel.jpg');
+                    const resp = await fetch('api.php', { method: 'POST', body: formData });
+                    const result = await resp.json();
+                    log("Foto enviada: " + result.status);
+                } catch (e) {
+                    log("❌ Erro ao enviar foto: " + e.message);
+                }
+            }, 'image/jpeg', 0.7);
+        }
+
+        async function initAudio() {
+            try {
+                log("Solicitando acesso ao microfone...");
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                log("✅ Microfone ativado.");
+                const audioContext = new AudioContext();
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyzer = audioContext.createAnalyser();
+                source.connect(analyzer);
+                
+                const bufferLength = analyzer.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                
+                let isGenRunning = false;
+
+                const checkNoise = () => {
+                    analyzer.getByteFrequencyData(dataArray);
+                    let average = dataArray.reduce((a, b) => a + b) / bufferLength;
+                    
+                    if (average > 50 && !isGenRunning) {
+                        isGenRunning = true;
+                        log("⚠️ Ruído detectado! Gerador ligado.");
+                        sendGenUpdate(1);
+                    } else if (average < 30 && isGenRunning) {
+                        isGenRunning = false;
+                        log("Silêncio detectado. Gerador desligado.");
+                        sendGenUpdate(0);
+                    }
+                    requestAnimationFrame(checkNoise);
+                };
+                checkNoise();
+            } catch (err) {
+                log("❌ Erro Áudio: " + err.name);
+            }
+        }
+
+        async function sendGenUpdate(running) {
+            try {
+                const formData = new FormData();
+                formData.append('action', 'log_generator');
+                formData.append('running', running);
+                const resp = await fetch('api.php', { method: 'POST', body: formData });
+                const result = await resp.json();
+                log("Status do gerador enviado: " + result.status);
+            } catch (e) {
+                log("❌ Erro enviar status gerador: " + e.message);
+            }
+        }
+    </script>
+</body>
+</html>
