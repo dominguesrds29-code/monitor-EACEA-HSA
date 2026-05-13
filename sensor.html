@@ -45,7 +45,7 @@
 </head>
 
 <body>
-    <h1 style="margin-top: 2rem;">Terminal Sensor SIME</h1>
+    <h1 style="margin-top: 2rem;">Terminal Sensor</h1>
     <p style="color: #888; margin-bottom: 2rem;">EACEA-HSA &middot; Mantenha o celular na tomada e a tela ligada.</p>
 
     <div id="setup-view">
@@ -97,9 +97,9 @@
                 initCamera();
                 initAudio();
                 setInterval(takePhoto, 60000);
-                
+
                 // Heartbeat mais frequente (20s) para resposta rápida no dashboard
-                sendHeartbeat(true); 
+                sendHeartbeat(true);
                 setInterval(() => sendHeartbeat(true), 20000);
             } catch (e) {
                 alert("Erro: " + e.message);
@@ -117,7 +117,7 @@
             try {
                 // Se isActive for false, enviamos uma data muito antiga para forçar o dashboard a ficar vermelho
                 const timestamp = isActive ? new Date().toISOString() : new Date(0).toISOString();
-                await supabaseClient.from('current_status').update({ 
+                await supabaseClient.from('current_status').update({
                     last_update: timestamp
                 }).eq('id', 1);
             } catch (e) { console.error("Heartbeat error", e); }
