@@ -139,9 +139,36 @@
                 let color = '#888';
                 let label = log.event_type.replace('_', ' ');
                 
-                if (log.event_type.includes('energia') || log.event_type.includes('queda')) { icon = 'zap'; color = log.event_type.includes('normalizada') ? '#34c759' : '#ff3b30'; }
-                else if (log.event_type.includes('gerador')) { icon = 'engine'; color = '#ff9500'; }
-                else if (log.event_type === 'leitura_painel') { icon = 'camera'; color = '#0071e3'; label = 'Monitoramento Visual'; }
+                // Mapeamento de legibilidade e suporte a registros antigos (Legacy support)
+                const translations = {
+                    'power_outage': 'Queda de Energia',
+                    'power_restore': 'Energia Normalizada',
+                    'generator_start': 'Gerador Ligado',
+                    'generator_stop': 'Gerador Desligado',
+                    'fuel_check': 'Monitoramento Visual',
+                    'queda_energia': 'Queda de Energia',
+                    'energia_normalizada': 'Energia Normalizada',
+                    'gerador_ligado': 'Gerador Ligado',
+                    'gerador_desligado': 'Gerador Desligado',
+                    'leitura_painel': 'Monitoramento Visual'
+                };
+
+                if (translations[log.event_type]) {
+                    label = translations[log.event_type];
+                }
+                
+                if (log.event_type.includes('energia') || log.event_type.includes('queda') || log.event_type.includes('power')) { 
+                    icon = 'zap'; 
+                    color = (log.event_type.includes('normalizada') || log.event_type.includes('restore')) ? '#34c759' : '#ff3b30'; 
+                }
+                else if (log.event_type.includes('gerador') || log.event_type.includes('generator')) { 
+                    icon = 'engine'; 
+                    color = '#ff9500'; 
+                }
+                else if (log.event_type === 'leitura_painel' || log.event_type === 'fuel_check') { 
+                    icon = 'camera'; 
+                    color = '#0071e3'; 
+                }
 
                 item.innerHTML = `
                     <div class="event-type">
