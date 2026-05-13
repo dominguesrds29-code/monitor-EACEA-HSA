@@ -80,9 +80,18 @@ header::after {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
     box-shadow: 0 0 20px var(--fab-blue-glow);
     flex-shrink: 0;
+    overflow: hidden;
+    padding: 0;
+}
+
+.fab-badge img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
 }
 
 h1 {
