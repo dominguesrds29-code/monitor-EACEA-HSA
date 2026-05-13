@@ -98,20 +98,27 @@
                 initAudio();
                 setInterval(takePhoto, 60000);
                 
-                // Heartbeat para indicar que o terminal está online
-                sendHeartbeat();
-                setInterval(sendHeartbeat, 30000);
+                // Heartbeat mais frequente (20s) para resposta rápida no dashboard
+                sendHeartbeat(true); 
+                setInterval(() => sendHeartbeat(true), 20000);
             } catch (e) {
                 alert("Erro: " + e.message);
                 log("❌ ERRO: " + e.message);
             }
         };
 
-        async function sendHeartbeat() {
+        // Evento para tentar avisar que o sensor foi fechado (não é 100% garantido, mas ajuda)
+        window.onbeforeunload = () => {
+            if (supabaseClient) sendHeartbeat(false);
+        };
+
+        async function sendHeartbeat(isActive) {
             if (!supabaseClient) return;
             try {
+                // Se isActive for false, enviamos uma data muito antiga para forçar o dashboard a ficar vermelho
+                const timestamp = isActive ? new Date().toISOString() : new Date(0).toISOString();
                 await supabaseClient.from('current_status').update({ 
-                    last_update: new Date().toISOString()
+                    last_update: timestamp
                 }).eq('id', 1);
             } catch (e) { console.error("Heartbeat error", e); }
         }

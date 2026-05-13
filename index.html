@@ -44,8 +44,10 @@
                 </div>
             </div>
             <div style="text-align: right;">
-                <div id="connection-status" class="indicator online"
-                    style="display:inline-block; margin-bottom:0.3rem;"></div>
+                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 0.3rem;">
+                    <span id="terminal-label" style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Terminal</span>
+                    <div id="connection-status" class="indicator offline pulse"></div>
+                </div>
                 <p id="last-sync" style="color: var(--text-secondary); font-size: 0.78rem;">Sincronizando...</p>
             </div>
         </header>
@@ -105,8 +107,8 @@
                     loadData();
                 }).subscribe();
 
-                // Check connection status locally every 15 seconds
-                setInterval(checkConnection, 15000);
+                // Check connection status locally every 5 seconds (much snappier)
+                setInterval(checkConnection, 5000);
 
             } catch (e) {
                 document.getElementById('last-sync').innerText = "Erro: " + e.message;
@@ -154,14 +156,19 @@
         function checkConnection() {
             if (!lastKnownStatus) return;
             const connStatus = document.getElementById('connection-status');
+            const label = document.getElementById('terminal-label');
             const lastUpdate = new Date(lastKnownStatus.last_update);
             const now = new Date();
             const diffSeconds = (now - lastUpdate) / 1000;
 
-            if (diffSeconds < 90) { // Verde se atualizado nos últimos 90 segundos
+            if (diffSeconds < 50) { // Verde se atualizado nos últimos 50 segundos
                 connStatus.className = 'indicator online';
+                label.style.color = 'var(--accent-green)';
+                label.innerText = 'Terminal Ativo';
             } else { // Vermelho se estiver sem sinal
                 connStatus.className = 'indicator offline pulse';
+                label.style.color = 'var(--accent-red)';
+                label.innerText = 'Terminal Offline';
             }
         }
 
