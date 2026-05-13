@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SIME – EACEA-HSA | Monitor de Energia</title>
+    <title>EACEA-HSA | Monitor de Energia</title>
     <link rel="stylesheet" href="style-fab.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
@@ -14,12 +15,13 @@
             border-radius: 12px;
             overflow: hidden;
             margin-top: 10px;
-            background: rgba(0,0,0,0.1);
+            background: rgba(0, 0, 0, 0.1);
             border: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
             justify-content: center;
         }
+
         .fuel-image-container img {
             width: 100%;
             height: 100%;
@@ -28,6 +30,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
@@ -41,7 +44,8 @@
                 </div>
             </div>
             <div style="text-align: right;">
-                <div id="connection-status" class="indicator online" style="display:inline-block; margin-bottom:0.3rem;"></div>
+                <div id="connection-status" class="indicator online"
+                    style="display:inline-block; margin-bottom:0.3rem;"></div>
                 <p id="last-sync" style="color: var(--text-secondary); font-size: 0.78rem;">Sincronizando...</p>
             </div>
         </header>
@@ -51,13 +55,15 @@
                 <div class="card">
                     <div class="card-title">Energia Principal</div>
                     <div class="card-value" id="power-status">---</div>
-                    <p id="power-detail" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">Verificando rede...</p>
+                    <p id="power-detail" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">
+                        Verificando rede...</p>
                 </div>
 
                 <div class="card">
                     <div class="card-title">Gerador</div>
                     <div class="card-value" id="gen-status">---</div>
-                    <p id="gen-detail" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">Monitor de ruído</p>
+                    <p id="gen-detail" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">
+                        Monitor de ruído</p>
                 </div>
 
                 <div class="card">
@@ -65,7 +71,8 @@
                     <div id="latest-fuel-image" class="fuel-image-container">
                         <i data-lucide="camera" style="color: var(--accent-blue); opacity: 0.5;"></i>
                     </div>
-                    <p id="fuel-detail" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.8rem;">Aguardando foto...</p>
+                    <p id="fuel-detail" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.8rem;">
+                        Aguardando foto...</p>
                 </div>
             </div>
 
@@ -81,22 +88,25 @@
     <script>
         const SB_URL = "https://wzbgryhhwpaejjkcnssh.supabase.co";
         const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6YmdyeWhod3BhZWpqa2Nuc3NoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTY0MzcsImV4cCI6MjA5NDE3MjQzN30.KyC7aqIGQNjVLZ-cNwrJlappj-btxikJZaziqzFdCbM";
-        
+
         let client = null;
 
         async function init() {
             try {
                 if (typeof supabase === 'undefined') return;
                 client = supabase.createClient(SB_URL, SB_KEY);
-                
+
                 await loadData();
-                
+
                 // Realtime
                 client.channel('any').on('postgres_changes', { event: '*', schema: 'public', table: 'current_status' }, payload => {
                     updateStatusUI(payload.new);
                 }).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'status_logs' }, () => {
                     loadData();
                 }).subscribe();
+
+                // Check connection status locally every 15 seconds
+                setInterval(checkConnection, 15000);
 
             } catch (e) {
                 document.getElementById('last-sync').innerText = "Erro: " + e.message;
@@ -121,11 +131,14 @@
                 .limit(1)
                 .single();
             if (photoLog) updateFuelCard(photoLog);
-            
+
             document.getElementById('last-sync').innerText = "Sincronizado: " + new Date().toLocaleTimeString();
         }
 
+        let lastKnownStatus = null;
+
         function updateStatusUI(status) {
+            lastKnownStatus = status;
             const pStatus = document.getElementById('power-status');
             pStatus.innerHTML = status.is_power_online ? '<span class="indicator online"></span> <span>ONLINE</span>' : '<span class="indicator offline pulse"></span> <span>FALTA ENERGIA</span>';
             document.getElementById('power-detail').innerText = status.is_power_online ? 'Rede Elétrica OK' : 'Operando via Bateria';
@@ -134,7 +147,22 @@
             gStatus.innerHTML = status.is_generator_running ? '<span class="indicator running pulse"></span> <span>LIGADO</span>' : '<span class="indicator"></span> <span>Desligado</span>';
             document.getElementById('gen-detail').innerText = status.is_generator_running ? 'Motor em operação' : 'Em stand-by';
 
+            checkConnection();
             lucide.createIcons();
+        }
+
+        function checkConnection() {
+            if (!lastKnownStatus) return;
+            const connStatus = document.getElementById('connection-status');
+            const lastUpdate = new Date(lastKnownStatus.last_update);
+            const now = new Date();
+            const diffSeconds = (now - lastUpdate) / 1000;
+
+            if (diffSeconds < 90) { // Verde se atualizado nos últimos 90 segundos
+                connStatus.className = 'indicator online';
+            } else { // Vermelho se estiver sem sinal
+                connStatus.className = 'indicator offline pulse';
+            }
         }
 
         function updateFuelCard(log) {
@@ -149,11 +177,11 @@
             logs.forEach(log => {
                 const item = document.createElement('div');
                 item.className = 'history-item';
-                
+
                 let icon = 'info';
                 let color = '#888';
                 let label = log.event_type.replace('_', ' ');
-                
+
                 // Mapeamento de legibilidade e suporte a registros antigos (Legacy support)
                 const translations = {
                     'power_outage': 'Queda de Energia',
@@ -171,18 +199,18 @@
                 if (translations[log.event_type]) {
                     label = translations[log.event_type];
                 }
-                
-                if (log.event_type.includes('energia') || log.event_type.includes('queda') || log.event_type.includes('power')) { 
-                    icon = 'zap'; 
-                    color = (log.event_type.includes('normalizada') || log.event_type.includes('restore')) ? '#34c759' : '#ff3b30'; 
+
+                if (log.event_type.includes('energia') || log.event_type.includes('queda') || log.event_type.includes('power')) {
+                    icon = 'zap';
+                    color = (log.event_type.includes('normalizada') || log.event_type.includes('restore')) ? '#34c759' : '#ff3b30';
                 }
-                else if (log.event_type.includes('gerador') || log.event_type.includes('generator')) { 
-                    icon = 'engine'; 
-                    color = '#ff9500'; 
+                else if (log.event_type.includes('gerador') || log.event_type.includes('generator')) {
+                    icon = 'engine';
+                    color = '#ff9500';
                 }
-                else if (log.event_type === 'leitura_painel' || log.event_type === 'fuel_check') { 
-                    icon = 'camera'; 
-                    color = '#0071e3'; 
+                else if (log.event_type === 'leitura_painel' || log.event_type === 'fuel_check') {
+                    icon = 'camera';
+                    color = '#0071e3';
                 }
 
                 item.innerHTML = `
@@ -203,4 +231,5 @@
         window.onload = init;
     </script>
 </body>
+
 </html>

@@ -1,17 +1,49 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminal Sensor SIME | EACEA-HSA</title>
+    <title>Terminal Sensor | EACEA-HSA</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { background: #000; color: #fff; text-align: center; padding: 1rem; }
-        #debug-log { text-align: left; background: #111; height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; padding: 10px; color: #0f0; border-radius: 10px; margin-top: 2rem; border: 1px solid #333; }
-        .big-btn { width: 100%; padding: 20px; background: #0071e3; color: white; border: none; border-radius: 50px; font-weight: bold; font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 15px rgba(0,113,227,0.4); }
+        body {
+            background: #000;
+            color: #fff;
+            text-align: center;
+            padding: 1rem;
+        }
+
+        #debug-log {
+            text-align: left;
+            background: #111;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.8rem;
+            padding: 10px;
+            color: #0f0;
+            border-radius: 10px;
+            margin-top: 2rem;
+            border: 1px solid #333;
+        }
+
+        .big-btn {
+            width: 100%;
+            padding: 20px;
+            background: #0071e3;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 113, 227, 0.4);
+        }
     </style>
 </head>
+
 <body>
     <h1 style="margin-top: 2rem;">Terminal Sensor SIME</h1>
     <p style="color: #888; margin-bottom: 2rem;">EACEA-HSA &middot; Mantenha o celular na tomada e a tela ligada.</p>
@@ -31,7 +63,7 @@
     <script>
         const SB_URL = "https://wzbgryhhwpaejjkcnssh.supabase.co";
         const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6YmdyeWhod3BhZWpqa2Nuc3NoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTY0MzcsImV4cCI6MjA5NDE3MjQzN30.KyC7aqIGQNjVLZ-cNwrJlappj-btxikJZaziqzFdCbM";
-        
+
         let supabaseClient = null;
         const debugLog = document.getElementById('debug-log');
         const video = document.getElementById('video');
@@ -55,21 +87,34 @@
 
                 log("Conectando ao Supabase...");
                 supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
-                
+
                 document.getElementById('setup-view').style.display = 'none';
                 document.getElementById('active-view').style.display = 'block';
-                
+
                 log("✅ Conectado. Iniciando sensores...");
-                
+
                 initBattery();
                 initCamera();
                 initAudio();
                 setInterval(takePhoto, 60000);
+                
+                // Heartbeat para indicar que o terminal está online
+                sendHeartbeat();
+                setInterval(sendHeartbeat, 30000);
             } catch (e) {
                 alert("Erro: " + e.message);
                 log("❌ ERRO: " + e.message);
             }
         };
+
+        async function sendHeartbeat() {
+            if (!supabaseClient) return;
+            try {
+                await supabaseClient.from('current_status').update({ 
+                    last_update: new Date().toISOString()
+                }).eq('id', 1);
+            } catch (e) { console.error("Heartbeat error", e); }
+        }
 
         async function initBattery() {
             if ('getBattery' in navigator) {
@@ -77,15 +122,15 @@
                 const update = async () => {
                     const online = battery.charging;
                     log("⚡ Energia: " + (online ? "Conectado" : "QUEDA!"));
-                    
+
                     try {
                         // Tenta atualizar ou inserir se não existir (UPSERT)
-                        const { error } = await supabaseClient.from('current_status').upsert({ 
+                        const { error } = await supabaseClient.from('current_status').upsert({
                             id: 1,
                             is_power_online: online,
                             last_update: new Date().toISOString()
                         });
-                        
+
                         if (error) throw error;
 
                         await supabaseClient.from('status_logs').insert({ event_type: online ? 'energia_normalizada' : 'queda_energia' });
@@ -108,15 +153,15 @@
         async function takePhoto() {
             if (!video.videoWidth) return;
             log("📸 Capturando e comprimindo imagem...");
-            
+
             // Redimensionar para economizar espaço (máximo 1024px de largura)
             const scale = Math.min(1, 1024 / video.videoWidth);
             canvas.width = video.videoWidth * scale;
             canvas.height = video.videoHeight * scale;
-            
+
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
+
             // Qualidade 0.5 (50%) para reduzir drasticamente o tamanho do arquivo
             canvas.toBlob(async (blob) => {
                 try {
@@ -124,19 +169,19 @@
                     const { data, error } = await supabaseClient.storage.from('assets').upload(fileName, blob, {
                         contentType: 'image/jpeg'
                     });
-                    
+
                     if (error) throw error;
 
                     const { data: { publicUrl } } = supabaseClient.storage.from('assets').getPublicUrl(fileName);
-                    
+
                     // Salvar a URL na tabela de logs para o Dashboard encontrar
-                    await supabaseClient.from('status_logs').insert({ 
-                        event_type: 'leitura_painel',                         image_url: publicUrl 
+                    await supabaseClient.from('status_logs').insert({
+                        event_type: 'leitura_painel', image_url: publicUrl
                     });
-                    
-                    log(`✅ Foto enviada (${(blob.size/1024).toFixed(1)} KB)`);
+
+                    log(`✅ Foto enviada (${(blob.size / 1024).toFixed(1)} KB)`);
                 } catch (e) { log("❌ Erro na foto: " + e.message); }
-            }, 'image/jpeg', 0.5); 
+            }, 'image/jpeg', 0.5);
         }
 
         async function initAudio() {
@@ -147,12 +192,12 @@
                 const analyzer = audioContext.createAnalyser();
                 source.connect(analyzer);
                 const dataArray = new Uint8Array(analyzer.frequencyBinCount);
-                
+
                 let isGenRunning = false;
                 const check = async () => {
                     analyzer.getByteFrequencyData(dataArray);
                     let avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
-                    
+
                     if (avg > 50 && !isGenRunning) {
                         isGenRunning = true;
                         log("⚠️ BARULHO! Gerador detectado.");
@@ -172,4 +217,5 @@
         }
     </script>
 </body>
+
 </html>
