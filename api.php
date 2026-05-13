@@ -21,7 +21,7 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 if ($action === 'update_power') {
     $is_online = isset($_POST['online']) ? (int)$_POST['online'] : 1;
     updateStatus($is_online, ($is_online ? 0 : 1)); 
-    logEvent($is_online ? 'power_restore' : 'power_outage');
+    logEvent($is_online ? 'energia_normalizada' : 'queda_energia');
     ob_clean();
     echo json_encode(['status' => 'success']);
     exit;
@@ -40,7 +40,7 @@ elseif ($action === 'upload_image') {
         $target_file = $upload_dir . $filename;
         
         if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
-            logEvent('fuel_check', 'Image uploaded', $target_file);
+            logEvent('leitura_painel', 'Image uploaded', $target_file);
             ob_clean();
             echo json_encode(['status' => 'success', 'path' => $target_file]);
         } else {
@@ -55,7 +55,7 @@ elseif ($action === 'upload_image') {
 elseif ($action === 'log_generator') {
     $running = isset($_POST['running']) ? (int)$_POST['running'] : 0;
     updateStatus(null, $running); // Only update generator status
-    logEvent($running ? 'generator_start' : 'generator_stop');
+    logEvent($running ? 'gerador_ligado' : 'gerador_desligado');
     
     if (isset($_FILES['audio'])) {
         $upload_dir = 'uploads/audio/';

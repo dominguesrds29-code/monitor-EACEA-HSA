@@ -4,7 +4,7 @@ USE energy_monitor;
 
 CREATE TABLE IF NOT EXISTS status_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    event_type ENUM('power_outage', 'power_restore', 'generator_start', 'generator_stop', 'fuel_check') NOT NULL,
+    event_type ENUM('queda_energia', 'energia_normalizada', 'gerador_ligado', 'gerador_desligado', 'leitura_painel') NOT NULL,
     status_value VARCHAR(255),
     image_path VARCHAR(255),
     audio_path VARCHAR(255),

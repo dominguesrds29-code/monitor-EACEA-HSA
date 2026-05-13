@@ -103,7 +103,7 @@
             if (logs) {
                 updateHistoryUI(logs);
                 // Pegar a foto mais recente para o Card
-                const lastPhoto = logs.find(l => l.event_type === 'fuel_check' && l.image_url);
+                const lastPhoto = logs.find(l => l.event_type === 'leitura_painel' && l.image_url);
                 if (lastPhoto) updateFuelCard(lastPhoto);
             }
             
@@ -139,9 +139,9 @@
                 let color = '#888';
                 let label = log.event_type.replace('_', ' ');
                 
-                if (log.event_type.includes('power')) { icon = 'zap'; color = log.event_type.includes('restore') ? '#34c759' : '#ff3b30'; }
-                else if (log.event_type.includes('generator')) { icon = 'engine'; color = '#ff9500'; }
-                else if (log.event_type === 'fuel_check') { icon = 'camera'; color = '#0071e3'; label = 'Monitoramento Visual'; }
+                if (log.event_type.includes('energia') || log.event_type.includes('queda')) { icon = 'zap'; color = log.event_type.includes('normalizada') ? '#34c759' : '#ff3b30'; }
+                else if (log.event_type.includes('gerador')) { icon = 'engine'; color = '#ff9500'; }
+                else if (log.event_type === 'leitura_painel') { icon = 'camera'; color = '#0071e3'; label = 'Monitoramento Visual'; }
 
                 item.innerHTML = `
                     <div class="event-type">

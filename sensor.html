@@ -88,7 +88,7 @@
                         
                         if (error) throw error;
 
-                        await supabaseClient.from('status_logs').insert({ event_type: online ? 'power_restore' : 'power_outage' });
+                        await supabaseClient.from('status_logs').insert({ event_type: online ? 'energia_normalizada' : 'queda_energia' });
                         log("✅ Sincronizado com a nuvem!");
                     } catch (e) { log("❌ Erro de Sincronização: " + e.message); }
                 };
@@ -131,8 +131,7 @@
                     
                     // Salvar a URL na tabela de logs para o Dashboard encontrar
                     await supabaseClient.from('status_logs').insert({ 
-                        event_type: 'fuel_check', 
-                        image_url: publicUrl 
+                        event_type: 'leitura_painel',                         image_url: publicUrl 
                     });
                     
                     log(`✅ Foto enviada (${(blob.size/1024).toFixed(1)} KB)`);
@@ -158,12 +157,12 @@
                         isGenRunning = true;
                         log("⚠️ BARULHO! Gerador detectado.");
                         await supabaseClient.from('current_status').update({ is_generator_running: true }).eq('id', 1);
-                        await supabaseClient.from('status_logs').insert({ event_type: 'generator_start' });
+                        await supabaseClient.from('status_logs').insert({ event_type: 'gerador_ligado' });
                     } else if (avg < 30 && isGenRunning) {
                         isGenRunning = false;
                         log("🤫 Silêncio. Gerador parou.");
                         await supabaseClient.from('current_status').update({ is_generator_running: false }).eq('id', 1);
-                        await supabaseClient.from('status_logs').insert({ event_type: 'generator_stop' });
+                        await supabaseClient.from('status_logs').insert({ event_type: 'gerador_desligado' });
                     }
                     requestAnimationFrame(check);
                 };
