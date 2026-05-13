@@ -102,10 +102,17 @@
             const { data: logs } = await client.from('status_logs').select('*').order('created_at', { ascending: false }).limit(15);
             if (logs) {
                 updateHistoryUI(logs);
-                // Pegar a foto mais recente para o Card
-                const lastPhoto = logs.find(l => l.event_type === 'leitura_painel' && l.image_url);
-                if (lastPhoto) updateFuelCard(lastPhoto);
             }
+
+            // Busca dedicada pela foto mais recente (suporta nomes antigos e novos)
+            const { data: photoLog } = await client
+                .from('status_logs')
+                .select('*')
+                .not('image_url', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+            if (photoLog) updateFuelCard(photoLog);
             
             document.getElementById('last-sync').innerText = "Sincronizado: " + new Date().toLocaleTimeString();
         }
