@@ -1,0 +1,16 @@
+{
+  "name": "SIME Dashboard EACEA-HSA",
+  "short_name": "SIME Dashboard",
+  "description": "Painel de Controle do Sistema Integrado de Monitoramento de Energia",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0a0a0c",
+  "theme_color": "#0071e3",
+  "icons": [
+    {
+      "src": "./dtcea_sj_logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

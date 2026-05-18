@@ -1,0 +1,16 @@
+{
+  "name": "SIME Sensor EACEA-HSA",
+  "short_name": "SIME Sensor",
+  "description": "Terminal de Monitoramento Remoto de Energia e Gerador",
+  "start_url": "./sensor.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#ff3b30",
+  "icons": [
+    {
+      "src": "./dtcea_sj_logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Terminal Sensor | EACEA-HSA</title>
+    <link rel="manifest" href="manifest-sensor.json">
+    <meta name="theme-color" content="#ff3b30">
+    <link rel="icon" type="image/png" href="dtcea_sj_logo.png">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -76,8 +79,34 @@
         }
 
         window.onload = () => {
+            // Registro do Service Worker para PWA
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js')
+                    .then(() => log("✅ Service Worker ativo"))
+                    .catch(err => log("⚠️ Erro Service Worker: " + err.message));
+            }
             log("Página carregada. Pronto para iniciar.");
         };
+
+        let wakeLock = null;
+        async function requestWakeLock() {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                log("✅ Wake Lock ativo (Tela não irá apagar)");
+                wakeLock.addEventListener('release', () => {
+                    log("ℹ️ Wake Lock liberado");
+                });
+            } catch (err) {
+                log(`❌ Erro Wake Lock: ${err.message}`);
+            }
+        }
+
+        // Re-adquirir Wake Lock quando voltar a ficar visível
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        });
 
         document.getElementById('start-btn').onclick = async () => {
             try {
@@ -93,9 +122,20 @@
 
                 log("✅ Conectado. Iniciando sensores...");
 
+                // Tentar travar a tela ligada (Wake Lock)
+                if ('wakeLock' in navigator) {
+                    await requestWakeLock();
+                } else {
+                    log("⚠️ Wake Lock não suportado no navegador");
+                }
+
                 initBattery();
                 initCamera();
                 initAudio();
+                
+                // Tirar foto inicial após 3 segundos para dar tempo de iniciar o stream da câmera
+                setTimeout(takePhoto, 3000);
+                
                 setInterval(takePhoto, 600000);
 
                 // Heartbeat mais frequente (20s) para resposta rápida no dashboard
@@ -194,7 +234,7 @@
         async function initAudio() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const audioContext = new AudioContext();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioContext.createMediaStreamSource(stream);
                 const analyzer = audioContext.createAnalyser();
                 source.connect(analyzer);

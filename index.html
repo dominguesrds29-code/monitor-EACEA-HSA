@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EACEA-HSA | Monitor de Energia</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0071e3">
+    <link rel="icon" type="image/png" href="dtcea_sj_logo.png">
     <link rel="stylesheet" href="style-fab.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
@@ -94,6 +97,11 @@
         let client = null;
 
         async function init() {
+            // Registro do Service Worker para PWA
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js')
+                    .catch(err => console.log('Erro Service Worker:', err));
+            }
             try {
                 if (typeof supabase === 'undefined') return;
                 client = supabase.createClient(SB_URL, SB_KEY);
